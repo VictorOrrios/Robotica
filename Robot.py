@@ -3,8 +3,8 @@
 from __future__ import print_function # use python 3 syntax but make it compatible with python 2
 from __future__ import division       #                           ''
 
-#import brickpi3 # import the BrickPi3 drivers
-import CoppeliaAPI.csimBrickpi as brickpi3 # import CopelliaSim api
+import brickpi3 # import the BrickPi3 drivers
+# import CoppeliaAPI.csimBrickpi as brickpi3 # import CopelliaSim api
 import time     # import the time library for the sleep function
 import sys
 import numpy as np
@@ -16,7 +16,7 @@ matplotlib.use("TkAgg")
 from multiprocessing import Process, Value, Array, Lock
 
 class Robot:
-    def __init__(self, init_position=[0.0, 0.0, 0.0]):
+    def __init__(self, init_position=[0.0, 0.0, 0.0], R: float=0.04, L: float=0.20, P: float=0.15):
         """
         Initialize basic robot params. \
 
@@ -30,8 +30,8 @@ class Robot:
         # self.L = 0.20
 
         # Coppelia Robot construction parameters
-        self.R = 0.04
-        self.L = 0.20
+        self.R = R
+        self.L = L
 
         ##################################################
         # Motors and sensors setup
@@ -70,7 +70,7 @@ class Robot:
         self.lock_encoder = Lock()
         
         # odometry update period
-        self.P = 0.15
+        self.P = P
         
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi

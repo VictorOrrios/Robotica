@@ -95,7 +95,10 @@ def main(args):
         th_ini = 0.0*np.pi/180.0
 
         # TODO, set odometry update interval as constructor parameter
-        robot = Robot([x_ini, y_ini, th_ini])
+        LEGO_WHEEL_RADIUS = 0.028
+        LEGO_AXIS_LENGTH = 0.12 # 15 studs, distance between center of 2 studs = 8mm
+        LEGO_ODOMETRY_UPDATE_PERIOD = 0.05 # seconds
+        robot = Robot([x_ini, y_ini, th_ini], LEGO_WHEEL_RADIUS, LEGO_AXIS_LENGTH, LEGO_ODOMETRY_UPDATE_PERIOD)
 
         print("X value at the beginning from main =", robot.x.value)
         print("Y value at the beginning from main =", robot.y.value)
@@ -108,8 +111,8 @@ def main(args):
         speed = 0.2
         radius = 0.8
         
-        # eight_shape_time_based(robot, speed, radius)
-        eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.05)
+        eight_shape_time_based(robot, speed, radius)
+        # eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.05)
         
         robot.stopOdometry()
 
