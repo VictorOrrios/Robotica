@@ -49,7 +49,7 @@ def poll_odometry_until(robot: Robot, threshold: tuple[float], poll_interval_sec
         x, y, th = robot.readOdometry()
         # threshold is [x, y, th IN RADIANS]
         # TODO, tune error thresholds based on expected error
-        if abs(x - threshold[0]) < 0.025 and abs(y - threshold[1]) < 0.025 and abs(th - threshold[2]) < 0.1:
+        if abs(x - threshold[0]) < 0.03 and abs(y - threshold[1]) < 0.03 and abs(th - threshold[2]) < 0.1:
             print("Reached threshold. Current odom: x=", x, ", y=", y, ", th=", th)
             break
         time.sleep(poll_interval_seconds)
@@ -61,7 +61,7 @@ def eight_shape_odometry_based(robot: Robot, speed: float, radius: float, poll_i
 
     # PART 1 (rotate in place):
     robot.setSpeed(0,np.deg2rad(-45))
-    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(90)), poll_interval_seconds)
+    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), poll_interval_seconds)
     """robot.lock_odometry.acquire()
     print("Odom values at Part 1. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
     robot.lock_odometry.release()"""
@@ -108,8 +108,8 @@ def main(args):
         speed = 0.2
         radius = 0.8
         
-        eight_shape_time_based(robot, speed, radius)
-        # eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.05)
+        # eight_shape_time_based(robot, speed, radius)
+        eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.05)
         
         robot.stopOdometry()
 

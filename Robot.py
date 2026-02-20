@@ -70,7 +70,7 @@ class Robot:
         self.lock_encoder = Lock()
         
         # odometry update period
-        self.P = 0.2
+        self.P = 0.15
         
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi
@@ -163,8 +163,8 @@ class Robot:
                     # Update the last stored econder values
 
                     # Read the motor encoder values NOT in mutual exclusion (to avoid overhead)
-                    motor_encoder_d_value = self.BP.get_motor_encoder(self.BP.PORT_B)
-                    motor_encoder_i_value = self.BP.get_motor_encoder(self.BP.PORT_C)
+                    motor_encoder_d_value = self.BP.get_motor_encoder(self.BP.PORT_C)
+                    motor_encoder_i_value = self.BP.get_motor_encoder(self.BP.PORT_B)
                     
                     # Read/write encoder values in mutual exclusion
                     self.lock_encoder.acquire()
