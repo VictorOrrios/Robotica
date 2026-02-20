@@ -72,7 +72,7 @@ class Robot:
         self.lock_encoder = Lock()
         
         # odometry update period
-        self.P = 0.1
+        self.P = 0.2
         
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi
@@ -97,8 +97,13 @@ class Robot:
         # Instead, use these values to compute wheel speeds, and to transform 
         # wheel speeds into robot linear and angular speeds.
         print("Read speed")
+
+        # Access encoder values in mutual exclusion
+        self.lock_encoder.acquire()
         wd = (self.cur_encoder_d.value - self.prev_encoder_d.value) / self.P
-        wi = (self.cur_encoder_d.value - self.prev_encoder_i.value) / self.P
+        wi = (self.cur_encoder_i.value - self.prev_encoder_i.value) / self.P
+        self.lock_encoder.release()
+
         wd = np.deg2rad(wd)
         wi = np.deg2rad(wi)
         v = (wd+wi)*self.R/2
@@ -108,9 +113,11 @@ class Robot:
     def readOdometry(self):
         # Here, do NOT udpate self.x.value, self.y.value or self.th.value
         """ Returns current value of odometry estimation """
+        self.lock_odometry.acquire()
         x = self.x.value
         y = self.y.value
         th = self.th.value
+        self.lock_odometry.release()
         return x,y,th        
 
     def startOdometry(self):
@@ -122,103 +129,116 @@ class Robot:
         
 
     def updateOdometry(self):
-      try:
-        """ To be filled ...  """
-        # Wait until the gyro sensor is ready
-        
-        # Initialize the CSV file to write the logs
-        print("Start odometry:",  time.ctime(), " : converts a time in seconds since the epoch to a string in local times")
-        
-        csvfile = open('mi_prueba.csv', 'w', newline='') # Modify the name as desired
-        header = ['t', 'x', 'y', 'th']  # Include more fields if you want
-        csvwriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        csvwriter.writerow(header)
-
-        tIniCSV = time.perf_counter() # To measure times with high precission. The absolute value is no useful. 
-        #                               Instead, use it for computing elapsed times. 
-        
-        # Initialize a figure for plotting
-        #current_fig = plt.figure()
-        
-        while not self.finished.value:
-            # High precission but used only to compute elapsed times (no use for absolute time)
-            tIni = time.perf_counter()
-
-            # compute updates
-
-            ######## UPDATE FROM HERE with your code (following the suggested scheme) ########
-           
+        try:
+            """ To be filled ...  """
+            # Wait until the gyro sensor is ready
             
-            try:
-                # READ ENCODERS.
-                print("Reading encoder values ....")
+            # Initialize the CSV file to write the logs
+            print("Start odometry:",  time.ctime(), " : converts a time in seconds since the epoch to a string in local times")
+            
+            csvfile = open('mi_prueba.csv', 'w', newline='') # Modify the name as desired
+            header = ['t', 'x', 'y', 'th']  # Include more fields if you want
+            csvwriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            csvwriter.writerow(header)
 
-                # update the last stored econder values
-                self.prev_encoder_d.value = self.cur_encoder_d.value
-                self.prev_encoder_i.value = self.cur_encoder_i.value
+            tIniCSV = time.perf_counter() # To measure times with high precission. The absolute value is no useful. 
+            #                               Instead, use it for computing elapsed times. 
+            
+            # Initialize a figure for plotting
+            #current_fig = plt.figure()
+            
+            while not self.finished.value:
+                # High precission but used only to compute elapsed times (no use for absolute time)
+                tIni = time.perf_counter()
 
-                [self.cur_encoder_d.value, self.cur_encoder_i.value] = [self.BP.get_motor_encoder(self.BP.PORT_B),
-                    self.BP.get_motor_encoder(self.BP.PORT_C)]
+                # compute updates
+
+                ######## UPDATE FROM HERE with your code (following the suggested scheme) ########
+            
                 
-                # If you read more sensors, you may need to wait a bit between reading
-                #time.sleep(0.02)
+                try:
+                    # READ ENCODERS.
+                    print("Reading encoder values ....")
+
+                    # update the last stored econder values
+
+                    # Read/write encoder values in mutual exclusion
+                    self.lock_encoder.acquire()
+                    self.prev_encoder_d.value = self.cur_encoder_d.value
+                    self.prev_encoder_i.value = self.cur_encoder_i.value
+
+                    [self.cur_encoder_d.value, self.cur_encoder_i.value] = [self.BP.get_motor_encoder(self.BP.PORT_B),
+                        self.BP.get_motor_encoder(self.BP.PORT_C)]
+                    self.lock_encoder.release()
+                    
+                    # If you read more sensors, you may need to wait a bit between reading
+                    #time.sleep(0.02)
+                    
+                    # TODO, read them in mutual exclusion
+                    print("Encoder Right increased in decrees in : ", self.cur_encoder_d.value - self.prev_encoder_d.value)
+                    print("Encoder Left increased in decrees in : ", self.cur_encoder_i.value - self.prev_encoder_i.value)
+                except IOError as error:
+                    print(error)
+
                 
-                print("Encoder Right increased in decrees in : ", self.cur_encoder_d.value - self.prev_encoder_d.value)
-                print("Encoder Left increased in decrees in : ", self.cur_encoder_i.value - self.prev_encoder_i.value)
-            except IOError as error:
-                print(error)
+                # UPDATE the odometry values x,y,th
+                self.lock_odometry.acquire()
+                x, y, th = self.x.value, self.y.value, self.th.value
+                self.lock_odometry.release()
+                
+                print("values obtained odometry: x = ", x, ", y=", y, ", th= ", th)
+                
+                # update odometry uses values that require mutex
+                # (they are declared as value, so lock is implicitly done for atomic operations, BUT =+ is NOT atomic)
 
-            
-            # UPDATE the odometry values x,y,th 
-            
-            print("values obtained odometry: x = ", self.x.value, ", y=", self.y.value, ", th= ", self.th.value)
-            
-            # update odometry uses values that require mutex
-            # (they are declared as value, so lock is implicitly done for atomic operations, BUT =+ is NOT atomic)
+                # Operations like += which involve a read and write are not atomic.
+                #with self.x.get_lock():
+    #                self.x.value+=1
 
-            # Operations like += which involve a read and write are not atomic.
-            #with self.x.get_lock():
-#                self.x.value+=1
+                # to "lock" a whole set of operations, we can use a "mutex"
+                #~ self.lock_odometry.acquire()
+                #~ self.y.value+=1
+                #~ self.th.value+=1
+                #~ self.lock_odometry.release()
 
-            # to "lock" a whole set of operations, we can use a "mutex"
-            #~ self.lock_odometry.acquire()
-            #~ self.y.value+=1
-            #~ self.th.value+=1
-            #~ self.lock_odometry.release()
+                v,w = self.readSpeed()
+                deltaTh = w*self.P
+                deltaS = v*self.P
+                with self.th.get_lock():
+                    angle = self.th.value + deltaTh/2
+                deltaX = deltaS*np.cos(angle)
+                deltaY = deltaS*np.sin(angle)
 
-            v,w = self.readSpeed()
-            deltaTh = w*self.P
-            deltaS = v*self.P
-            angle = self.th.value + deltaTh/2
-            deltaX = deltaS*np.cos(angle)
-            deltaY = deltaS*np.sin(angle)
+                self.lock_odometry.acquire()
+                self.x.value += deltaX
+                self.y.value += deltaY
+                self.th.value += deltaTh
+                self.th.value = self.normaliza_rad(self.th.value)
+                # Assign to local variables (csv writing)
+                x_val = self.x.value
+                y_val = self.y.value
+                th_val = self.th.value
+                self.lock_odometry.release()
 
-            self.lock_odometry.acquire()
-            self.x.value += deltaX
-            self.y.value += deltaY
-            self.th.value += deltaTh
-            self.lock_odometry.release()
-
-            # save LOG
-            # Need to decide when to store a log with the updated odometry ...
-            csvwriter.writerow([tIni-tIniCSV, self.x.value, self.y.value, self.th.value*180.0/np.pi])
-            
-
-            ######## UPDATE UNTIL HERE with your code ########
+                # save LOG
+                # Need to decide when to store a log with the updated odometry ...
+                csvwriter.writerow([tIni-tIniCSV, x_val, y_val, th_val*180.0/np.pi])
+                
+                ######## UPDATE UNTIL HERE with your code ########
 
 
-            # High precission but used only to compute elapsed times (no use for absolute time)
-            tEnd = time.perf_counter()
-            
-            time.sleep(self.P - (tEnd-tIni)) # Si este valor es negativo saldra error, pero queremos que pase para controlarlo
+                # High precission but used only to compute elapsed times (no use for absolute time)
+                tEnd = time.perf_counter()
+                
+                time.sleep(self.P - (tEnd-tIni)) # Si este valor es negativo saldra error, pero queremos que pase para controlarlo
 
-        print("Stopping odometry ... X= ", self.x.value, ", Y= ", self.y.value, ", th= ", self.th.value)
-        csvfile.close()
+            print("Stopping odometry ... X= ", x_val, ", Y= ", y_val, ", th= ", th_val)
+            csvfile.close()
         
-      except KeyboardInterrupt:
-         # except the program gets interrupted by Ctrl+C on the keyboard.
-         # THIS IS IMPORTANT if we want that motors STOP when we Ctrl+C ...
-         time.sleep(0.5)
+        except KeyboardInterrupt:
+            # except the program gets interrupted by Ctrl+C on the keyboard.
+            # THIS IS IMPORTANT if we want that motors STOP when we Ctrl+C ...
+            time.sleep(0.5)
 
     # Stop the odometry thread.
     def stopOdometry(self):
