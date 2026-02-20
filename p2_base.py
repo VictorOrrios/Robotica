@@ -5,7 +5,83 @@ import numpy as np
 import time
 from Robot import Robot
 
+def eight_shape_time_based(robot: Robot, speed: float, radius: float):
+    robot.lock_odometry.acquire()
+    print("Odom values at Start. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
 
+    # PART 1:
+    robot.setSpeed(0,np.deg2rad(-45))
+    time.sleep(2)
+    robot.lock_odometry.acquire()
+    print("Odom values at Part 1. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+
+    # PART 2:
+    robot.setSpeed(speed,speed/radius)
+    time.sleep(np.pi*radius/speed)
+    robot.lock_odometry.acquire()
+    print("Odom values at Part 2. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+
+    # PART 3:
+    robot.setSpeed(speed,-speed/radius)
+    time.sleep(2*np.pi*radius/speed)
+    robot.lock_odometry.acquire()
+    print("Odom values at Part 3. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+
+    # PART 4:
+    robot.setSpeed(speed,speed/radius)
+    time.sleep(np.pi*radius/speed)
+    robot.lock_odometry.acquire()
+    print("Odom values at Part 4. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+
+    # ...
+
+    robot.lock_odometry.acquire()
+    print("Odom values at main at the END. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+    
+def poll_odometry_until(robot: Robot, threshold: tuple[float], poll_interval_seconds: float):
+    while True:
+        x, y, th = robot.readOdometry()
+        # threshold is [x, y, th IN RADIANS]
+        # TODO, tune error thresholds based on expected error
+        if abs(x - threshold[0]) < 0.025 and abs(y - threshold[1]) < 0.025 and abs(th - threshold[2]) < 0.1:
+            print("Reached threshold. Current odom: x=", x, ", y=", y, ", th=", th)
+            break
+        time.sleep(poll_interval_seconds)
+
+def eight_shape_odometry_based(robot: Robot, speed: float, radius: float, poll_interval_seconds: float):
+    robot.lock_odometry.acquire()
+    print("Odom values at Start. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()
+
+    # PART 1 (rotate in place):
+    robot.setSpeed(0,np.deg2rad(-45))
+    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(90)), poll_interval_seconds)
+    """robot.lock_odometry.acquire()
+    print("Odom values at Part 1. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
+    robot.lock_odometry.release()"""
+    
+    # PART 2 (first half of the first loop):
+    robot.setSpeed(speed,speed/radius)
+    poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), poll_interval_seconds)
+    
+    # PART 3 (first half of the second loop):
+    robot.setSpeed(speed,-speed/radius)
+    poll_odometry_until(robot, (4*radius, 0.0, np.deg2rad(-90)), poll_interval_seconds)
+    
+    # PART 4 (second half of the second loop):
+    # robot.setSpeed(speed,-speed/radius) # No need, we just keep moving with the same speed
+    poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), poll_interval_seconds)
+    
+    # PART 5 (second half of the first loop):
+    robot.setSpeed(speed,speed/radius)
+    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), poll_interval_seconds)
+    
 def main(args):
     try:
         if args.radioD < 0:
@@ -18,6 +94,7 @@ def main(args):
         y_ini=0.0
         th_ini = 0.0*np.pi/180.0
 
+        # TODO, set odometry update interval as constructor parameter
         robot = Robot([x_ini, y_ini, th_ini])
 
         print("X value at the beginning from main =", robot.x.value)
@@ -27,6 +104,14 @@ def main(args):
         # 1. launch updateOdometry Process()
         robot.startOdometry()
         time.sleep(2)
+        
+        speed = 0.2
+        radius = 0.8
+        
+        eight_shape_time_based(robot, speed, radius)
+        # eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.05)
+        
+        robot.stopOdometry()
 
         # 2. perform trajectory
 
@@ -56,53 +141,9 @@ def main(args):
         
         #print("End")
 
-        robot.lock_odometry.acquire()
-        print("Odom values at Start. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-        
-        speed = 0.2
-        radius = 0.8
-
-
-        # PART 1:
-        robot.setSpeed(0,np.deg2rad(-45))
-        time.sleep(2)
-        robot.lock_odometry.acquire()
-        print("Odom values at Part 1. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-
-        # PART 2:
-        robot.setSpeed(speed,speed/radius)
-        time.sleep(np.pi*radius/speed)
-        robot.lock_odometry.acquire()
-        print("Odom values at Part 2. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-
-        # PART 3:
-        robot.setSpeed(speed,-speed/radius)
-        time.sleep(2*np.pi*radius/speed)
-        robot.lock_odometry.acquire()
-        print("Odom values at Part 3. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-
-        # PART 2:
-        robot.setSpeed(speed,speed/radius)
-        time.sleep(np.pi*radius/speed)
-        robot.lock_odometry.acquire()
-        print("Odom values at Part 4. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-
-        # ...
-
-        robot.lock_odometry.acquire()
-        print("Odom values at main at the END. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-        robot.lock_odometry.release()
-
         # 3. wrap up and close stuff ...
         # This currently unconfigure the sensors, disable the motors,
         # and restore the LED to the control of the BrickPi3 firmware.
-        robot.stopOdometry()
-
 
     except KeyboardInterrupt:
     # except the program gets interrupted by Ctrl+C on the keyboard.

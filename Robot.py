@@ -46,9 +46,7 @@ class Robot:
         # # reset encoder B and C (or all the motors you are using)
         self.BP.offset_motor_encoder(self.BP.PORT_B, self.BP.get_motor_encoder(self.BP.PORT_B))
         self.BP.offset_motor_encoder(self.BP.PORT_C, self.BP.get_motor_encoder(self.BP.PORT_C))
-            
         
-
         ##################################################
         # odometry shared memory values
         self.x = Value('d',init_position[0])
@@ -77,11 +75,11 @@ class Robot:
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi
         angle_out = (angle_in + np.pi) % (2 * np.pi) - np.pi
-        print("Processing the angle (in radians) ", angle_in, ". We obtain ", angle_out, " (in radians)")
+        # print("Processing the angle (in radians) ", angle_in, ". We obtain ", angle_out, " (in radians)")
         return angle_out
 
     def setSpeed(self, v,w):
-        print("setting speed to v=", v, ", w=", w)
+        # print("setting speed to v=", v, ", w=", w)
         # v in [m/s] and w in [rad/s]
         
         speedRad_right = v/self.R + w*self.L/(2*self.R)
@@ -98,11 +96,16 @@ class Robot:
         # wheel speeds into robot linear and angular speeds.
         print("Read speed")
 
-        # Access encoder values in mutual exclusion
+        # Read encoder values in mutual exclusion (minimize exclusive access overhead)
         self.lock_encoder.acquire()
-        wd = (self.cur_encoder_d.value - self.prev_encoder_d.value) / self.P
-        wi = (self.cur_encoder_i.value - self.prev_encoder_i.value) / self.P
+        curr_enc_d, prev_enc_d = self.cur_encoder_d.value, self.prev_encoder_d.value
+        curr_enc_i, prev_enc_i = self.cur_encoder_i.value, self.prev_encoder_i.value
         self.lock_encoder.release()
+        
+        wd = (curr_enc_d - prev_enc_d) / self.P
+        wi = (curr_enc_i - prev_enc_i) / self.P
+
+        print("wd: ", wd, ", wi: ", wi)
 
         wd = np.deg2rad(wd)
         wi = np.deg2rad(wi)
@@ -114,9 +117,8 @@ class Robot:
         # Here, do NOT udpate self.x.value, self.y.value or self.th.value
         """ Returns current value of odometry estimation """
         self.lock_odometry.acquire()
-        x = self.x.value
-        y = self.y.value
-        th = self.th.value
+        # Read values in mutual exclusion
+        x, y, th = self.x.value, self.y.value, self.th.value
         self.lock_odometry.release()
         return x,y,th        
 
@@ -126,7 +128,6 @@ class Robot:
         self.p = Process(target=self.updateOdometry, args=())
         self.p.start()
         print("PID: ", self.p.pid)
-        
 
     def updateOdometry(self):
         try:
@@ -134,7 +135,7 @@ class Robot:
             # Wait until the gyro sensor is ready
             
             # Initialize the CSV file to write the logs
-            print("Start odometry:",  time.ctime(), " : converts a time in seconds since the epoch to a string in local times")
+            # print("Start odometry:",  time.ctime(), " : converts a time in seconds since the epoch to a string in local times")
             
             csvfile = open('mi_prueba.csv', 'w', newline='') # Modify the name as desired
             header = ['t', 'x', 'y', 'th']  # Include more fields if you want
@@ -155,38 +156,33 @@ class Robot:
 
                 ######## UPDATE FROM HERE with your code (following the suggested scheme) ########
             
-                
                 try:
                     # READ ENCODERS.
                     print("Reading encoder values ....")
 
-                    # update the last stored econder values
+                    # Update the last stored econder values
 
+                    # Read the motor encoder values NOT in mutual exclusion (to avoid overhead)
+                    motor_encoder_d_value = self.BP.get_motor_encoder(self.BP.PORT_B)
+                    motor_encoder_i_value = self.BP.get_motor_encoder(self.BP.PORT_C)
+                    
                     # Read/write encoder values in mutual exclusion
                     self.lock_encoder.acquire()
                     self.prev_encoder_d.value = self.cur_encoder_d.value
                     self.prev_encoder_i.value = self.cur_encoder_i.value
 
-                    [self.cur_encoder_d.value, self.cur_encoder_i.value] = [self.BP.get_motor_encoder(self.BP.PORT_B),
-                        self.BP.get_motor_encoder(self.BP.PORT_C)]
+                    [self.cur_encoder_d.value, self.cur_encoder_i.value] = [motor_encoder_d_value,
+                        motor_encoder_i_value]
                     self.lock_encoder.release()
                     
                     # If you read more sensors, you may need to wait a bit between reading
                     #time.sleep(0.02)
                     
                     # TODO, read them in mutual exclusion
-                    print("Encoder Right increased in decrees in : ", self.cur_encoder_d.value - self.prev_encoder_d.value)
-                    print("Encoder Left increased in decrees in : ", self.cur_encoder_i.value - self.prev_encoder_i.value)
+                    # print("Encoder Right increased in decrees in : ", self.cur_encoder_d.value - self.prev_encoder_d.value)
+                    # print("Encoder Left increased in decrees in : ", self.cur_encoder_i.value - self.prev_encoder_i.value)
                 except IOError as error:
                     print(error)
-
-                
-                # UPDATE the odometry values x,y,th
-                self.lock_odometry.acquire()
-                x, y, th = self.x.value, self.y.value, self.th.value
-                self.lock_odometry.release()
-                
-                print("values obtained odometry: x = ", x, ", y=", y, ", th= ", th)
                 
                 # update odometry uses values that require mutex
                 # (they are declared as value, so lock is implicitly done for atomic operations, BUT =+ is NOT atomic)
@@ -204,35 +200,41 @@ class Robot:
                 v,w = self.readSpeed()
                 deltaTh = w*self.P
                 deltaS = v*self.P
+                
+                # Read the angle in mutual exclusion
                 with self.th.get_lock():
                     angle = self.th.value + deltaTh/2
+                    
+                print("Delta th: ", deltaTh, ", Delta S: ", deltaS, ", w: ", w, ", v: ", v)
+                print("Read angle in mutual exclusion: ", angle)
+                    
                 deltaX = deltaS*np.cos(angle)
                 deltaY = deltaS*np.sin(angle)
 
+                # Acquire lock, to avoid race conditions when calling `readOdometry`
                 self.lock_odometry.acquire()
                 self.x.value += deltaX
                 self.y.value += deltaY
                 self.th.value += deltaTh
                 self.th.value = self.normaliza_rad(self.th.value)
-                # Assign to local variables (csv writing)
-                x_val = self.x.value
-                y_val = self.y.value
-                th_val = self.th.value
                 self.lock_odometry.release()
+                
+                print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH= ", self.th.value)
 
                 # save LOG
                 # Need to decide when to store a log with the updated odometry ...
-                csvwriter.writerow([tIni-tIniCSV, x_val, y_val, th_val*180.0/np.pi])
+                # No need to read in mutual exclusion, since we JUST WROTE them and we
+                # only perform writes on THIS thread
+                csvwriter.writerow([tIni-tIniCSV, self.x.value, self.y.value, self.th.value*180.0/np.pi])
                 
                 ######## UPDATE UNTIL HERE with your code ########
-
 
                 # High precission but used only to compute elapsed times (no use for absolute time)
                 tEnd = time.perf_counter()
                 
                 time.sleep(self.P - (tEnd-tIni)) # Si este valor es negativo saldra error, pero queremos que pase para controlarlo
 
-            print("Stopping odometry ... X= ", x_val, ", Y= ", y_val, ", th= ", th_val)
+            # print("Stopping odometry ... X= ", x_val, ", Y= ", y_val, ", th= ", th_val)
             csvfile.close()
         
         except KeyboardInterrupt:
