@@ -39,12 +39,22 @@ class Robot:
         # Create an instance of the BrickPi3 class. BP will be the BrickPi3 object.
         self.BP = brickpi3.BrickPi3()
 
-        # # Configure sensors, for example a touch sensor or a gyro
+        # Configure sensors, for example a touch sensor or a gyro
         # self.BP.set_sensor_type(self.BP.PORT_1, self.BP.SENSOR_TYPE.TOUCH)
-        # self.BP.set_sensor_type(self.BP.PORT_4, self.BP.SENSOR_TYPE.EV3_GYRO_ABS_DPS)
+        
+        # Configure Gyro on PORT 3
+        self.GYRO_PORT = self.BP.PORT_3
+        self.BP.set_sensor_type(self.GYRO_PORT, self.BP.SENSOR_TYPE.EV3_GYRO_ABS_DPS)
+        
+        # Wait for gyro calibration
+        print("Initializing Gyro scope... (keep robot still)")
+        # In a real robot, we might need more time or a check loop
+        # But for now we just wait.
+        time.sleep(5.0) 
         
         # # reset encoder B and C (or all the motors you are using)
-        self.BP.offset_motor_encoder(self.BP.PORT_B, self.BP.get_motor_encoder(self.BP.PORT_B))
+        # FOR LEGO: port A is left motor, port C is right motor
+        self.BP.offset_motor_encoder(self.BP.PORT_A, self.BP.get_motor_encoder(self.BP.PORT_A))
         self.BP.offset_motor_encoder(self.BP.PORT_C, self.BP.get_motor_encoder(self.BP.PORT_C))
         
         ##################################################
@@ -72,6 +82,24 @@ class Robot:
         # odometry update period
         self.P = P
         
+    def resetGyro(self):
+        """ Recalibrates the gyro sensor. Robot MUST be still. """
+        self.BP.set_sensor_type(self.GYRO_PORT, self.BP.SENSOR_TYPE.NONE)
+        time.sleep(0.5)
+        self.BP.set_sensor_type(self.GYRO_PORT, self.BP.SENSOR_TYPE.EV3_GYRO_ABS_DPS)
+        time.sleep(1.0)
+        print("Gyro reset complete.")
+
+    def getGyroAngle(self):
+        """ Returns the current angle from the gyro in RADIANS. """
+        try:
+            # get_sensor returns [angle, dps]
+            value = self.BP.get_sensor(self.GYRO_PORT)
+            # Gyro returns integer degrees, convert to radians
+            return np.deg2rad(value[0])
+        except brickpi3.SensorError:
+            return None
+        
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi
         angle_out = (angle_in + np.pi) % (2 * np.pi) - np.pi
@@ -87,7 +115,7 @@ class Robot:
         speedDPS_right = np.rad2deg(speedRad_right)
         speedDPS_left = np.rad2deg(speedRad_left)
         self.BP.set_motor_dps(self.BP.PORT_C, speedDPS_right)
-        self.BP.set_motor_dps(self.BP.PORT_B, speedDPS_left)
+        self.BP.set_motor_dps(self.BP.PORT_A, speedDPS_left)
 
 
     def readSpeed(self):
@@ -164,7 +192,7 @@ class Robot:
 
                     # Read the motor encoder values NOT in mutual exclusion (to avoid overhead)
                     motor_encoder_d_value = self.BP.get_motor_encoder(self.BP.PORT_C)
-                    motor_encoder_i_value = self.BP.get_motor_encoder(self.BP.PORT_B)
+                    motor_encoder_i_value = self.BP.get_motor_encoder(self.BP.PORT_A)
                     
                     # Read/write encoder values in mutual exclusion
                     self.lock_encoder.acquire()
@@ -212,14 +240,27 @@ class Robot:
                 deltaY = deltaS*np.sin(angle)
 
                 # Acquire lock, to avoid race conditions when calling `readOdometry`
+                # Read the angle from gyro (change sign)
+                # TODO, handle when getGyroAngle returns None
+                gyro_angle = -1 *self.getGyroAngle()
+                
+                # Acquire lock, to avoid race conditions when calling `readOdometry`
                 self.lock_odometry.acquire()
+                if gyro_angle is not None:
+                    # If we have gyro, we prioritize it for the heading
+                    # Note: Gyro might need normalization too depending on how it's handled
+                    self.th.value = self.normaliza_rad(gyro_angle)
+                    print("Gyro angle: ", self.th.value)
+                else:
+                    # Fallback to encoder-based th if gyro fails
+                    self.th.value += deltaTh
+                    self.th.value = self.normaliza_rad(self.th.value)
+                
                 self.x.value += deltaX
                 self.y.value += deltaY
-                self.th.value += deltaTh
-                self.th.value = self.normaliza_rad(self.th.value)
                 self.lock_odometry.release()
                 
-                print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH= ", self.th.value)
+                print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH(deg)= ", np.deg2rad(self.th.value))
 
                 # save LOG
                 # Need to decide when to store a log with the updated odometry ...
