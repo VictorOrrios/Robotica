@@ -90,15 +90,15 @@ class Robot:
         time.sleep(1.0)
         print("Gyro reset complete.")
 
-    def getGyroAngle(self):
+    def getGyroData(self):
         """ Returns the current angle from the gyro in RADIANS. """
         try:
             # get_sensor returns [angle, dps]
             value = self.BP.get_sensor(self.GYRO_PORT)
             # Gyro returns integer degrees, convert to radians
-            return np.deg2rad(value[0])
+            return self.normaliza_rad(-np.deg2rad(value[0])), np.deg2rad(value[1])
         except brickpi3.SensorError:
-            return None
+            return None, None
         
 
     def normaliza_rad(self, angle_in): # Lleva al rango -pi .. +pi
@@ -242,22 +242,17 @@ class Robot:
                 # Acquire lock, to avoid race conditions when calling `readOdometry`
                 # Read the angle from gyro (change sign)
                 # TODO, handle when getGyroAngle returns None
-                gyro_angle = -1 *self.getGyroAngle()
-                
+                gyroTh, gyroW = self.getGyroData()
+                if gyroTh is not None:
+                    deltaTh = gyroW*self.P
+                    deltaX = deltaS*np.cos(gyroTh+deltaTh/2)
+                    deltaY = deltaS*np.sin(gyroTh+deltaTh/2)
+
                 # Acquire lock, to avoid race conditions when calling `readOdometry`
                 self.lock_odometry.acquire()
-                if gyro_angle is not None:
-                    # If we have gyro, we prioritize it for the heading
-                    # Note: Gyro might need normalization too depending on how it's handled
-                    self.th.value = self.normaliza_rad(gyro_angle)
-                    print("Gyro angle: ", self.th.value)
-                else:
-                    # Fallback to encoder-based th if gyro fails
-                    self.th.value += deltaTh
-                    self.th.value = self.normaliza_rad(self.th.value)
-                
                 self.x.value += deltaX
                 self.y.value += deltaY
+                self.th.value += deltaTh
                 self.lock_odometry.release()
                 
                 print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH(deg)= ", np.deg2rad(self.th.value))

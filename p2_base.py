@@ -117,7 +117,7 @@ def main(args):
         # TODO, set odometry update interval as constructor parameter
         LEGO_WHEEL_RADIUS = 0.028 # NLego: 0.04, Lego: 0.028
         LEGO_AXIS_LENGTH = 0.12 # 15 studs, distance between center of 2 studs = 8mm -> NLego: 0.2
-        LEGO_ODOMETRY_UPDATE_PERIOD = 0.035 # seconds -> 0.05 for lego
+        LEGO_ODOMETRY_UPDATE_PERIOD = 0.05 # seconds -> 0.05 for lego
         robot = Robot([x_ini, y_ini, th_ini], LEGO_WHEEL_RADIUS, LEGO_AXIS_LENGTH, LEGO_ODOMETRY_UPDATE_PERIOD)
 
         print("X value at the beginning from main =", robot.x.value)
