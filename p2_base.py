@@ -60,6 +60,8 @@ def poll_odometry_until(robot: Robot, values: [float], tolerance_left: [float], 
             break
         time.sleep(poll_interval_seconds)
 
+
+
 def eight_shape_odometry_based(robot: Robot, speed: float, radius: float, poll_interval_seconds: float):
     robot.lock_odometry.acquire()
     print("Odom values at Start. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
@@ -115,9 +117,9 @@ def main(args):
         th_ini = 0.0*np.pi/180.0
 
         # TODO, set odometry update interval as constructor parameter
-        LEGO_WHEEL_RADIUS = 0.028 # NLego: 0.04, Lego: 0.028
+        LEGO_WHEEL_RADIUS = 0.028 # Sim: 0.04, Lego: 0.028
         LEGO_AXIS_LENGTH = 0.12 # 15 studs, distance between center of 2 studs = 8mm -> NLego: 0.2
-        LEGO_ODOMETRY_UPDATE_PERIOD = 0.05 # seconds -> 0.05 for lego
+        LEGO_ODOMETRY_UPDATE_PERIOD = 0.035 # seconds -> 0.05 for lego
         robot = Robot([x_ini, y_ini, th_ini], LEGO_WHEEL_RADIUS, LEGO_AXIS_LENGTH, LEGO_ODOMETRY_UPDATE_PERIOD)
 
         print("X value at the beginning from main =", robot.x.value)
@@ -128,8 +130,8 @@ def main(args):
         robot.startOdometry()
         time.sleep(2)
         
-        speed = 0.05 # NLego -> 0.2
-        radius = 0.1 # NLego -> 0.8
+        speed = 0.1 # Sim -> 0.2
+        radius = 0.2 # Sim -> 0.8
         
         # eight_shape_time_based(robot, speed, radius)
         eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.01)

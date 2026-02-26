@@ -96,7 +96,7 @@ class Robot:
             # get_sensor returns [angle, dps]
             value = self.BP.get_sensor(self.GYRO_PORT)
             # Gyro returns integer degrees, convert to radians
-            return self.normaliza_rad(-np.deg2rad(value[0])), np.deg2rad(value[1])
+            return self.normaliza_rad(-np.deg2rad(value[0])), -np.deg2rad(value[1])
         except brickpi3.SensorError:
             return None, None
         
@@ -228,34 +228,36 @@ class Robot:
                 v,w = self.readSpeed()
                 deltaTh = w*self.P
                 deltaS = v*self.P
-                
-                # Read the angle in mutual exclusion
-                with self.th.get_lock():
-                    angle = self.th.value + deltaTh/2
-                    
-                print("Delta th: ", deltaTh, ", Delta S: ", deltaS, ", w: ", w, ", v: ", v)
-                print("Read angle in mutual exclusion: ", angle)
-                    
-                deltaX = deltaS*np.cos(angle)
-                deltaY = deltaS*np.sin(angle)
 
                 # Acquire lock, to avoid race conditions when calling `readOdometry`
-                # Read the angle from gyro (change sign)
-                # TODO, handle when getGyroAngle returns None
+                # Read the angle from gyro (change sign) if not use motor encoder data
                 gyroTh, gyroW = self.getGyroData()
                 if gyroTh is not None:
+                    with self.th.get_lock():
+                        prevTh = self.th.value
                     deltaTh = gyroW*self.P
-                    deltaX = deltaS*np.cos(gyroTh+deltaTh/2)
-                    deltaY = deltaS*np.sin(gyroTh+deltaTh/2)
+                    deltaS = v/w*deltaTh
+                    deltaX = deltaS*np.cos(prevTh+deltaTh/2)
+                    deltaY = deltaS*np.sin(prevTh+deltaTh/2)
+                    print("Update odometry with gyro: gyroTh:",gyroTh," gyroW:",gyroW)
+                else:
+                    # Read the angle in mutual exclusion
+                    with self.th.get_lock():
+                        angle = self.th.value + deltaTh/2
+                    print("Delta th: ", deltaTh, ", Delta S: ", deltaS, ", w: ", w, ", v: ", v)
+                    print("Read angle in mutual exclusion: ", angle)
+                    deltaX = deltaS*np.cos(angle)
+                    deltaY = deltaS*np.sin(angle)
 
                 # Acquire lock, to avoid race conditions when calling `readOdometry`
                 self.lock_odometry.acquire()
                 self.x.value += deltaX
                 self.y.value += deltaY
                 self.th.value += deltaTh
+                self.th.value = self.normaliza_rad(self.th.value)
                 self.lock_odometry.release()
                 
-                print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH(deg)= ", np.deg2rad(self.th.value))
+                print("Updated odometry. Current values: X= ", self.x.value, ", Y= ", self.y.value, ", TH(deg)= ", np.rad2deg(self.th.value))
 
                 # save LOG
                 # Need to decide when to store a log with the updated odometry ...
