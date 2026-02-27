@@ -44,7 +44,7 @@ def eight_shape_time_based(robot: Robot, speed: float, radius: float):
     print("Odom values at main at the END. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
     robot.lock_odometry.release()"""
     
-def poll_odometry_until(robot: Robot, values: [float], tolerance_left: [float], tolerance_right: [float], poll_interval_seconds: float):
+def poll_odometry_until(robot: Robot, values, tolerance_left, tolerance_right, poll_interval_seconds: float):
     while True:
         x, y, th = robot.readOdometry()
         # threshold is [x, y, th IN RADIANS]
@@ -60,48 +60,64 @@ def poll_odometry_until(robot: Robot, values: [float], tolerance_left: [float], 
             break
         time.sleep(poll_interval_seconds)
 
-
+def poll_odometry_theta_until(robot: Robot, theta_target, left_right_tolerance, poll_interval_seconds: float):
+    while True:
+        _x, _y, th = robot.readOdometry()
+        th_met = theta_target - left_right_tolerance[0] <= th <= theta_target + left_right_tolerance[1]
+    
+        if th_met:
+            print("Reached threshold. Current odom: x=", _x, ", y=", _y, ", th=", th)
+            break
+        time.sleep(poll_interval_seconds)
 
 def eight_shape_odometry_based(robot: Robot, speed: float, radius: float, poll_interval_seconds: float):
-    robot.lock_odometry.acquire()
-    print("Odom values at Start. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-    robot.lock_odometry.release()
 
-    tolerances_1 = [0.05, 0.05, np.deg2rad(1)]
+    DONT_CARE = 0.1 # 10cm, means we dont care about the x and/or y values
+    # TODO, tune tolerance based on robot speed
+    GLOB_THETA_TOL = np.deg2rad(0.5) # 0.6 degrees, means we want to be within 0.6 degrees of the target angle (for both left and right tolerance)
+    
     # PART 1 (rotate in place):
     robot.setSpeed(0,np.deg2rad(-45))
-    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), tolerances_1, tolerances_1, poll_interval_seconds)
-    """robot.lock_odometry.acquire()
-    print("Odom values at Part 1. X= ", robot.x.value, ", Y= ", robot.y.value, ", TH= ", robot.th.value)
-    robot.lock_odometry.release()"""
+    # tolerances_1 = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), tolerances_1, tolerances_1, poll_interval_seconds)
+    th_tolerances = (GLOB_THETA_TOL, GLOB_THETA_TOL)
+    poll_odometry_theta_until(robot, np.deg2rad(-90), th_tolerances, poll_interval_seconds)
     print("Part 1 complete")
     
-    tolerances_2_left = [0.02, 0.02, np.deg2rad(2)]
-    tolerances_2_right = [0.02, 0.02, np.deg2rad(2)]
     # PART 2 (first half of the first loop):
     robot.setSpeed(speed,speed/radius)
-    poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), tolerances_2_left, tolerances_2_right, poll_interval_seconds)
+    # tolerances_2_left = [DONT_CARE, DONT_CARE, np.deg2rad(0.5)]
+    # tolerances_2_right = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), tolerances_2_left, tolerances_2_right, poll_interval_seconds)
+    th_tolerances = (GLOB_THETA_TOL, GLOB_THETA_TOL)
+    poll_odometry_theta_until(robot, np.deg2rad(90), th_tolerances, poll_interval_seconds)
     print("Part 2 complete")
 
-    tolerances_3_left = [0.02, 0.02, np.deg2rad(2)]
-    tolerances_3_right = [0.02, 0.02, np.deg2rad(0)]
     # PART 3 (first half of the second loop):
     robot.setSpeed(speed,-speed/radius)
-    poll_odometry_until(robot, (4*radius, 0.0, np.deg2rad(-90)), tolerances_3_left, tolerances_3_right, poll_interval_seconds)
+    # tolerances_3_left = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # tolerances_3_right = [DONT_CARE, DONT_CARE, np.deg2rad(0.5)]
+    # poll_odometry_until(robot, (4*radius, 0.0, np.deg2rad(-90)), tolerances_3_left, tolerances_3_right, poll_interval_seconds)
+    th_tolerances = (GLOB_THETA_TOL, GLOB_THETA_TOL)
+    poll_odometry_theta_until(robot, np.deg2rad(-90), th_tolerances, poll_interval_seconds)
     print("Part 3 complete")
     
-    tolerances_4_left = [0.02, 0.02, np.deg2rad(2)]
-    tolerances_4_right = [0.02, 0.02, np.deg2rad(1)]
     # PART 4 (second half of the second loop):
     # robot.setSpeed(speed,-speed/radius) # No need, we just keep moving with the same speed
-    poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), tolerances_4_left, tolerances_4_right, poll_interval_seconds)
+    # tolerances_4_left = [DONT_CARE, DONT_CARE, np.deg2rad(2)]
+    # tolerances_4_right = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # poll_odometry_until(robot, (2*radius, 0.0, np.deg2rad(90)), tolerances_4_left, tolerances_4_right, poll_interval_seconds)
+    th_tolerances = (GLOB_THETA_TOL, GLOB_THETA_TOL)
+    poll_odometry_theta_until(robot, np.deg2rad(90), th_tolerances, poll_interval_seconds)
     print("Part 4 complete")
 
     # PART 5 (second half of the first loop):
-    tolerances_5_left = [0.02, 0.02, np.deg2rad(1)]
-    tolerances_5_right = [0.02, 0.02, np.deg2rad(1)]
     robot.setSpeed(speed,speed/radius)
-    poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), tolerances_5_left, tolerances_5_right, poll_interval_seconds)
+    # tolerances_5_left = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # tolerances_5_right = [DONT_CARE, DONT_CARE, np.deg2rad(1)]
+    # poll_odometry_until(robot, (0.0, 0.0, np.deg2rad(-90)), tolerances_5_left, tolerances_5_right, poll_interval_seconds)
+    th_tolerances = (np.deg2rad(1.2), GLOB_THETA_TOL)
+    poll_odometry_theta_until(robot, np.deg2rad(-90), th_tolerances, poll_interval_seconds)
     print("Part 5 complete")
     
 def main(args):
@@ -119,7 +135,7 @@ def main(args):
         # TODO, set odometry update interval as constructor parameter
         LEGO_WHEEL_RADIUS = 0.028 # Sim: 0.04, Lego: 0.028
         LEGO_AXIS_LENGTH = 0.12 # 15 studs, distance between center of 2 studs = 8mm -> NLego: 0.2
-        LEGO_ODOMETRY_UPDATE_PERIOD = 0.035 # seconds -> 0.05 for lego
+        LEGO_ODOMETRY_UPDATE_PERIOD = 0.03 # seconds -> 0.05 for lego
         robot = Robot([x_ini, y_ini, th_ini], LEGO_WHEEL_RADIUS, LEGO_AXIS_LENGTH, LEGO_ODOMETRY_UPDATE_PERIOD)
 
         print("X value at the beginning from main =", robot.x.value)
@@ -130,11 +146,11 @@ def main(args):
         robot.startOdometry()
         time.sleep(2)
         
-        speed = 0.1 # Sim -> 0.2
-        radius = 0.2 # Sim -> 0.8
+        speed = 0.05 # Sim -> 0.2
+        radius = 0.1 # Sim -> 0.8
         
         # eight_shape_time_based(robot, speed, radius)
-        eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.01)
+        eight_shape_odometry_based(robot, speed, radius, poll_interval_seconds=0.008)
         
         robot.stopOdometry()
 

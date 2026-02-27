@@ -236,7 +236,10 @@ class Robot:
                     with self.th.get_lock():
                         prevTh = self.th.value
                     deltaTh = gyroW*self.P
-                    deltaS = v/w*deltaTh
+                    if abs(w) > 1e-6:
+                        deltaS = (v/w)*deltaTh
+                    else:
+                        deltaS = v*self.P
                     deltaX = deltaS*np.cos(prevTh+deltaTh/2)
                     deltaY = deltaS*np.sin(prevTh+deltaTh/2)
                     print("Update odometry with gyro: gyroTh:",gyroTh," gyroW:",gyroW)
